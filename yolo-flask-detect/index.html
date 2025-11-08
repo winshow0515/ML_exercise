@@ -60,6 +60,27 @@
             max-width: 90%;
             color: #ff0;
         }
+
+        #toggleBtn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-family: monospace;
+            font-weight: bold;
+            background: #0f0;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+
+        #toggleBtn.paused {
+            background: #f00;
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -68,6 +89,7 @@
         <canvas id="canvas"></canvas>
         <div id="info">Initializing...</div>
         <div id="debug"></div>
+        <button id="toggleBtn" onclick="toggleDetection()">PAUSE</button>
     </div>
 
     <script>
@@ -76,8 +98,10 @@
         const ctx = canvas.getContext('2d');
         const info = document.getElementById('info');
         const debug = document.getElementById('debug');
+        const toggleBtn = document.getElementById('toggleBtn');
         
         let isProcessing = false;
+        let isRunning = true;  // Detection on/off state
         let detectionCount = 0;
 
         // Debug log
@@ -86,10 +110,23 @@
             debug.textContent = msg;
         }
 
-        // Check if HTTPS
-        log(`Protocol: ${window.location.protocol}`);
+        // Toggle detection on/off
+        function toggleDetection() {
+            isRunning = !isRunning;
+            
+            if (isRunning) {
+                toggleBtn.textContent = 'PAUSE';
+                toggleBtn.classList.remove('paused');
+                info.textContent = 'Detection RUNNING';
+            } else {
+                toggleBtn.textContent = 'START';
+                toggleBtn.classList.add('paused');
+                info.textContent = 'Detection PAUSED';
+                // Keep the last detection on screen when paused
+            }
+        }
 
-        // Start camera
+        log(`Protocol: ${window.location.protocol}`);
         log('Requesting camera access...');
         
         navigator.mediaDevices.getUserMedia({
@@ -105,7 +142,7 @@
             video.onloadedmetadata = () => {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                info.textContent = 'Ready - Camera active';
+                info.textContent = 'Ready - Detection RUNNING';
                 log(`Video size: ${video.videoWidth}x${video.videoHeight}`);
                 startDetection();
             };
@@ -115,7 +152,6 @@
             info.textContent = errorMsg;
             log(errorMsg);
             
-            // Show helpful message
             if (err.name === 'NotAllowedError') {
                 info.innerHTML = 'Camera permission denied!<br>Please allow camera access and reload.';
             } else if (err.name === 'NotFoundError') {
@@ -126,7 +162,9 @@
         });
 
         function captureAndDetect() {
-            if (isProcessing) return;
+            // Skip if paused or already processing
+            if (!isRunning || isProcessing) return;
+            
             isProcessing = true;
 
             const tempCanvas = document.createElement('canvas');
@@ -144,7 +182,7 @@
             })
             .then(res => res.json())
             .then(data => {
-                if (data.detections) {
+                if (data.detections && isRunning) {  // Only draw if still running
                     drawDetections(data.detections);
                     detectionCount++;
                     info.textContent = `Detections: ${detectionCount} | Objects: ${data.detections.length}`;
